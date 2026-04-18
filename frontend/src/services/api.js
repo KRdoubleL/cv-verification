@@ -9,7 +9,6 @@ const api = axios.create({
   },
 });
 
-// Add token to requests
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
@@ -18,7 +17,6 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Auth
 export const login = async (email, password) => {
   const response = await api.post('/api/auth/login/json', { email, password });
   return response.data;
@@ -29,12 +27,20 @@ export const getCurrentUser = async () => {
   return response.data;
 };
 
-// Candidates (Recruiter)
+export const uploadPDF = async (file, batchName) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('batch_name', batchName);
+  const response = await api.post('/api/candidates/upload/pdf', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
 export const uploadCSV = async (file, batchName) => {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('batch_name', batchName);
-  
   const response = await api.post('/api/candidates/upload/csv', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
@@ -56,7 +62,11 @@ export const getCandidate = async (candidateId) => {
   return response.data;
 };
 
-// Verification (Verifier)
+export const deleteCandidate = async (candidateId) => {
+  const response = await api.delete(`/api/candidates/${candidateId}`);
+  return response.data;
+};
+
 export const getPendingCandidates = async () => {
   const response = await api.get('/api/verification/pending');
   return response.data;
@@ -92,7 +102,6 @@ export const getStats = async () => {
   return response.data;
 };
 
-// Reports
 export const generateReport = async (candidateId) => {
   const response = await api.post(`/api/reports/generate/${candidateId}`);
   return response.data;

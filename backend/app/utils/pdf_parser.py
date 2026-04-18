@@ -1,214 +1,109 @@
 import pdfplumber
 import io
 import re
-from typing import Dict, Any, List
+import json
+import os
+from typing import Dict, Any
+from openai import OpenAI
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+def extract_text_from_pdf(pdf_content: bytes) -> str:
+    with pdfplumber.open(io.BytesIO(pdf_content)) as pdf:
+        full_text = ""
+        for page in pdf.pages:
+            text = page.extract_text()
+            if text:
+                full_text += text + "\n"
+    return full_text.strip()
 
 def parse_pdf_cv(pdf_content: bytes) -> Dict[str, Any]:
-    """
-    Parse PDF CV and extract structured data.
-    
-    This is a basic parser - for production, you'd want ML-based parsing.
-    """
-    
     try:
-        candidate = {
-            "full_name": None,
+        raw_text = extract_text_from_pdf(pdf_content)
+
+        if not raw_text:
+            raise ValueError("Could not extract text from PDF")
+
+        prompt = f"""Extract structured data from this CV/resume text. The CV may be in any language (German, French, Spanish, etc.) - extract the data regardless of language but return field names in English.
+
+Return ONLY a valid JSON object with exactly this structure, no other text:
+
+{{
+  "full_name": "string or null",
+  "email": "string or null",
+  "phone": "string or null",
+  "linkedin_url": "string or null",
+  "current_position": "string or null",
+  "current_company": "string or null",
+  "summary": "string or null",
+  "skills": ["skill1", "skill2"],
+  "employment": [
+    {{
+      "company": "string",
+      "position": "string",
+      "start_date": "string or null",
+      "end_date": "string or null",
+      "is_current": boolean,
+      "description": "string or null"
+    }}
+  ],
+  "education": [
+    {{
+      "institution": "string",
+      "degree": "string or null",
+      "field": "string or null",
+      "start_date": "string or null",
+      "end_date": "string or null"
+    }}
+  ]
+}}
+
+Section headers in other languages to look for:
+- Experience: "Berufserfahrung", "Expérience", "Experiencia", "Опыт работы", "Досвід роботи"
+- Education: "Ausbildung", "Formation", "Educación", "Образование", "Освіта"
+- Skills: "Kenntnisse", "Compétences", "Habilidades", "Навыки"
+- Summary: "Zusammenfassung", "Profil", "Résumé", "Resumen"
+
+CV Text:
+{raw_text[:4000]}"""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=2000
+        )
+
+        result_text = response.choices[0].message.content.strip()
+        result_text = re.sub(r'^```json\s*', '', result_text)
+        result_text = re.sub(r'\s*```$', '', result_text)
+
+        candidate_data = json.loads(result_text)
+
+        candidate_data.setdefault("full_name", "Unknown")
+        candidate_data.setdefault("email", None)
+        candidate_data.setdefault("phone", None)
+        candidate_data.setdefault("linkedin_url", None)
+        candidate_data.setdefault("employment", [])
+        candidate_data.setdefault("education", [])
+        candidate_data.setdefault("skills", [])
+        candidate_data.setdefault("summary", None)
+        candidate_data.setdefault("current_position", None)
+        candidate_data.setdefault("current_company", None)
+
+        return candidate_data
+
+    except Exception as e:
+        return {
+            "full_name": "Unknown",
             "email": None,
             "phone": None,
             "linkedin_url": None,
             "employment": [],
-            "education": []
+            "education": [],
+            "skills": [],
+            "summary": None,
+            "current_position": None,
+            "current_company": None,
+            "parse_error": str(e)
         }
-        
-        with pdfplumber.open(io.BytesIO(pdf_content)) as pdf:
-            full_text = ""
-            for page in pdf.pages:
-                full_text += page.extract_text() + "\n"
-        
-        lines = full_text.split('\n')
-        
-        # Extract name (usually first non-empty line)
-        for line in lines:
-            line = line.strip()
-            if line and len(line) > 2:
-                candidate["full_name"] = line
-                break
-        
-        # Extract email
-        email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
-        emails = re.findall(email_pattern, full_text)
-        if emails:
-            candidate["email"] = emails[0]
-        
-        # Extract phone
-        phone_patterns = [
-            r'\+?\d{1,3}[-.\s]?\(?\d{1,4}\)?[-.\s]?\d{1,4}[-.\s]?\d{1,9}',
-            r'\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}'
-        ]
-        for pattern in phone_patterns:
-            phones = re.findall(pattern, full_text)
-            if phones:
-                candidate["phone"] = phones[0]
-                break
-        
-        # Extract LinkedIn
-        linkedin_pattern = r'(?:https?://)?(?:www\.)?linkedin\.com/in/[\w-]+'
-        linkedins = re.findall(linkedin_pattern, full_text)
-        if linkedins:
-            candidate["linkedin_url"] = linkedins[0]
-        
-        # Parse employment
-        employment_section = extract_section(full_text, 
-            ['experience', 'work experience', 'professional experience', 'employment history', 'work history'])
-        
-        if employment_section:
-            candidate["employment"] = parse_employment_section(employment_section)
-        
-        # Parse education
-        education_section = extract_section(full_text,
-            ['education', 'academic background', 'qualifications', 'academic history'])
-        
-        if education_section:
-            candidate["education"] = parse_education_section(education_section)
-        
-        return candidate
-    
-    except Exception as e:
-        raise ValueError(f"Error parsing PDF: {str(e)}")
-
-def extract_section(text: str, headers: List[str]) -> str:
-    """Extract section from CV text based on header keywords"""
-    text_lower = text.lower()
-    
-    for header in headers:
-        pattern = r'\n\s*' + re.escape(header) + r'\s*\n'
-        match = re.search(pattern, text_lower)
-        
-        if match:
-            start = match.end()
-            
-            next_sections = ['education', 'experience', 'skills', 'projects', 'certifications', 
-                           'awards', 'publications', 'languages', 'references']
-            
-            end = len(text)
-            for next_section in next_sections:
-                if next_section != header:
-                    next_pattern = r'\n\s*' + re.escape(next_section) + r'\s*\n'
-                    next_match = re.search(next_pattern, text_lower[start:])
-                    if next_match:
-                        end = start + next_match.start()
-                        break
-            
-            return text[start:end].strip()
-    
-    return ""
-
-def parse_employment_section(text: str) -> List[Dict[str, Any]]:
-    """Parse employment entries from text"""
-    employment = []
-    
-    lines = text.split('\n')
-    current_entry = None
-    
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        
-        # Check if line looks like a date range
-        date_pattern = r'(\d{4}|\w{3}\s+\d{4})\s*[-–—]\s*(\d{4}|\w{3}\s+\d{4}|Present|Current)'
-        date_match = re.search(date_pattern, line, re.IGNORECASE)
-        
-        if date_match:
-            if current_entry:
-                employment.append(current_entry)
-            
-            current_entry = {
-                "company": "Unknown Company",
-                "position": "Unknown Position",
-                "start_date": date_match.group(1),
-                "end_date": date_match.group(2),
-                "is_current": "present" in date_match.group(2).lower() or "current" in date_match.group(2).lower(),
-                "description": ""
-            }
-            
-            clean_line = line[:date_match.start()].strip()
-            if clean_line:
-                parts = clean_line.split('|')
-                if len(parts) >= 2:
-                    current_entry["position"] = parts[0].strip()
-                    current_entry["company"] = parts[1].strip()
-                else:
-                    current_entry["position"] = clean_line
-        
-        elif current_entry:
-            if current_entry["description"]:
-                current_entry["description"] += " " + line
-            else:
-                current_entry["description"] = line
-    
-    if current_entry:
-        employment.append(current_entry)
-    
-    if not employment:
-        employment.append({
-            "company": "See PDF for details",
-            "position": "Unable to parse automatically",
-            "start_date": None,
-            "end_date": None,
-            "is_current": False,
-            "description": "Please review PDF manually"
-        })
-    
-    return employment
-
-def parse_education_section(text: str) -> List[Dict[str, Any]]:
-    """Parse education entries from text"""
-    education = []
-    
-    lines = text.split('\n')
-    current_entry = None
-    
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        
-        degree_keywords = ['bachelor', 'master', 'phd', 'doctorate', 'diploma', 'bsc', 'msc', 'ba', 'ma', 'mba']
-        
-        if any(keyword in line.lower() for keyword in degree_keywords):
-            if current_entry:
-                education.append(current_entry)
-            
-            current_entry = {
-                "institution": "Unknown Institution",
-                "degree": line,
-                "field": None,
-                "start_date": None,
-                "end_date": None
-            }
-        
-        date_pattern = r'(\d{4})\s*[-–—]\s*(\d{4}|Present|Current)'
-        date_match = re.search(date_pattern, line, re.IGNORECASE)
-        
-        if date_match and current_entry:
-            current_entry["start_date"] = date_match.group(1)
-            current_entry["end_date"] = date_match.group(2)
-        
-        if current_entry and not any(keyword in line.lower() for keyword in degree_keywords):
-            if not date_match:
-                current_entry["institution"] = line
-    
-    if current_entry:
-        education.append(current_entry)
-    
-    if not education:
-        education.append({
-            "institution": "See PDF for details",
-            "degree": "Unable to parse automatically",
-            "field": None,
-            "start_date": None,
-            "end_date": None
-        })
-    
-    return education

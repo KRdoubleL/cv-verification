@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List
+from typing import Optional, List, Any, Dict
 from datetime import datetime
 from enum import Enum
 
@@ -106,6 +106,17 @@ class CandidateBase(BaseModel):
     phone: Optional[str] = None
     linkedin_url: Optional[str] = None
 
+class CandidateCard(CandidateBase):
+    id: int
+    batch_id: int
+    verification_status: VerificationStatus
+    change_score: int
+    created_at: datetime
+    parsed_cv_data: Optional[Dict[str, Any]] = None
+
+    class Config:
+        from_attributes = True
+
 class CandidateCreate(CandidateBase):
     employment_history: List[EmploymentCreate] = []
     education_history: List[EducationCreate] = []
@@ -117,6 +128,9 @@ class CandidateDetail(CandidateBase):
     verifier_id: Optional[int]
     verified_at: Optional[datetime]
     created_at: datetime
+    change_score: int
+    pdf_path: Optional[str] = None
+    parsed_cv_data: Optional[Dict[str, Any]] = None
     employment_history: List[Employment] = []
     education_history: List[Education] = []
 
@@ -142,12 +156,19 @@ class CandidateBatch(BaseModel):
         from_attributes = True
 
 class CandidateBatchDetail(CandidateBatch):
-    candidates: List[CandidateDetail] = []
+    candidates: List[CandidateCard] = []
 
 class CSVUploadResponse(BaseModel):
     batch_id: int
     batch_name: str
     total_candidates: int
+    message: str
+
+class PDFUploadResponse(BaseModel):
+    batch_id: int
+    batch_name: str
+    candidate_id: int
+    candidate_name: str
     message: str
 
 class ReportGenerate(BaseModel):
@@ -158,6 +179,16 @@ class ReportResponse(BaseModel):
     candidate_id: int
     html_content: str
     generated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class LinkedInSnapshot(BaseModel):
+    id: int
+    candidate_id: int
+    snapshot_data: Optional[Dict[str, Any]]
+    taken_at: datetime
+    source: Optional[str]
 
     class Config:
         from_attributes = True
