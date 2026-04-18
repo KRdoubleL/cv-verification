@@ -65,10 +65,10 @@ Section headers in other languages to look for:
 - Summary: "Zusammenfassung", "Profil", "Résumé", "Resumen"
 
 CV Text:
-{raw_text[:4000]}"""
+{raw_text[:8000]}"""
 
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
             max_tokens=2000

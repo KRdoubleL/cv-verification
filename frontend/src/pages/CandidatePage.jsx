@@ -63,7 +63,7 @@ export default function CandidatePage() {
     <Layout>
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
-          <button onClick={() => navigate('/dashboard')} className="text-sm text-gray-500 hover:text-gray-900">- Back</button>
+          <button onClick={() => navigate('/dashboard')} className="text-sm text-gray-600 hover:text-gray-900 bg-white border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors">← Back</button>
           <div className="flex items-center gap-3">
             <span className={`text-sm font-semibold border rounded-full px-3 py-1 ${scoreColor}`}>{score}% unchanged</span>
             {candidate.pdf_path && (
