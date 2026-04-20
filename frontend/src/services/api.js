@@ -4,16 +4,12 @@ const API_BASE_URL = 'http://localhost:8000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
 });
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
@@ -67,6 +63,7 @@ export const deleteCandidate = async (candidateId) => {
   return response.data;
 };
 
+// Verification
 export const getPendingCandidates = async () => {
   const response = await api.get('/api/verification/pending');
   return response.data;
@@ -82,13 +79,28 @@ export const getMyQueue = async () => {
   return response.data;
 };
 
-export const updateEmployment = async (employmentId, data) => {
-  const response = await api.put(`/api/verification/employment/${employmentId}`, data);
+export const getSectionChecks = async (candidateId) => {
+  const response = await api.get(`/api/verification/sections/${candidateId}`);
   return response.data;
 };
 
-export const updateEducation = async (educationId, data) => {
-  const response = await api.put(`/api/verification/education/${educationId}`, data);
+export const markSectionChecked = async (candidateId, sectionType, sectionRefId, note) => {
+  const response = await api.post(`/api/verification/sections/${candidateId}/check`, {
+    section_type: sectionType,
+    section_ref_id: sectionRefId,
+    note
+  });
+  return response.data;
+};
+
+export const markSectionChanged = async (candidateId, sectionType, sectionRefId, oldValue, newValue, note) => {
+  const response = await api.post(`/api/verification/sections/${candidateId}/change`, {
+    section_type: sectionType,
+    section_ref_id: sectionRefId,
+    old_value: oldValue,
+    new_value: newValue,
+    note
+  });
   return response.data;
 };
 

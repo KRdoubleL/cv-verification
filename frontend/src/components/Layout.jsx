@@ -10,13 +10,15 @@ export default function Layout({ children }) {
     navigate('/login')
   }
 
+  const homeRoute = user?.role === 'verifier' ? '/verify' : '/dashboard'
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-6">
-              <span className="font-semibold text-gray-900 cursor-pointer" onClick={() => navigate('/dashboard')}>
+              <span className="font-semibold text-gray-900 cursor-pointer" onClick={() => navigate(homeRoute)}>
                 CV Verification
               </span>
               {(user?.role === 'recruiter' || user?.role === 'admin') && (
@@ -24,16 +26,26 @@ export default function Layout({ children }) {
                   Upload CV
                 </button>
               )}
+              {user?.role === 'admin' && (
+                <button onClick={() => navigate('/verify')} className="text-sm text-gray-600 hover:text-gray-900">
+                  Verify queue
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-4">
               <span className="text-sm text-gray-500">{user?.full_name}</span>
               <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full capitalize">{user?.role}</span>
-              <button onClick={handleLogout} className="text-sm text-gray-500 hover:text-gray-900">Sign out</button>
+              <button onClick={handleLogout}
+                className="text-sm text-gray-500 hover:text-gray-900 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors">
+                Sign out
+              </button>
             </div>
           </div>
         </div>
       </header>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{children}</main>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {children}
+      </main>
     </div>
   )
 }
